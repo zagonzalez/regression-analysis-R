@@ -1,0 +1,222 @@
+---
+title: "Module 9 Assignment"
+author: "Zachary Gonzalez"
+date: '2022-03-23'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+Question: On the Golub et al. (1999) data set, find the expression values for the GRO2 GRO2 
+oncogene and the GRO3 GRO3 oncogene. (Hint: Use grep() to find the gene rows 
+in golub.gnames. Review module 2, or page 12 of the textbook on how to do this. 
+Be careful to search only in the column with gene names.) 
+ 
+(a) Find the correlation between the expression values of these two genes. 
+ 
+(b) Find the parametric 90% confident interval for the correlation with cor.test(). 
+(Hint: use ?cor.test to learn how to set the confidence level different from 
+the default value of 95%.) 
+ 
+(c) Find the bootstrap 90% confident interval for the correlation.
+
+```{r}
+library(multtest)
+data(golub)
+gol.fac <- factor(golub.cl, levels=0:1, labels = c("ALL", "AML"))
+```
+
+
+```{r}
+grep("GRO2",golub.gnames[,2])
+grep("GRO3",golub.gnames[,2])
+```
+
+part a 
+
+```{r}
+x<-golub[2714,] #GRO2
+y<-golub[2715,] #GRO3
+plot(x,y,xlab=golub.gnames[2714,3],ylab=golub.gnames[2715,3]) #plot gene expressions
+```
+```{r}
+cor(x,y) #calculate correlation between two genes 
+```
+
+part b - 90% parametric confidence interval 
+
+```{r}
+cor.test(x, y, conf.level = 0.90)
+```
+
+part c - 90% bootstrap confident interval 
+
+```{r}
+nboot <- 2000
+boot.cor <- matrix(0,nrow=nboot,ncol=1) #Vector to save re sampled statistic 
+data <- cbind(x,y)
+for (i in 1:nboot){
+  data.star <- data[sample(1:nrow(data),replace=TRUE),]
+  boot.cor[i,] <- cor(data.star[,1], data.star[,2])
+}
+quantile(boot.cor[,1],c(0.05,0.95))
+```
+
+QUESTION: On the Golub et al. (1999) data set, we consider the correlation between the Zyxin 
+gene expression values and each of the gene in the data set. 
+ 
+(a) How many of the genes have correlation values less than negative 0.5? 
+(Those genes are highly negatively correlated with Zyxin gene). 
+ 
+(b) Find the gene names for the top five genes that are most negatively 
+correlated with Zyxin gene. 
+ 
+(c)   Using the t-test, how many genes are negatively correlated with the Zyxin 
+gene? Use a false discovery rate of 0.05. (Hint: use cor.test() to get the 
+p-values then adjust for FDR. Notice that we want a one-sided test here.)
+
+```{r}
+grep("Zyxin",golub.gnames[,2])
+```
+
+part a 
+
+```{r}
+golub <- data.frame(golub)
+zyxin_expression_cor <- apply(golub,1,cor, as.numeric(golub[2124,]))
+cor.lessthan0.5 <- zyxin_expression_cor < 0.5
+sum(cor.lessthan0.5)
+```
+
+part b
+
+```{r}
+order_genes <-order(zyxin_expression_cor)
+golub.gnames[order_genes,][1:5,2]
+```
+
+part c
+
+```{r}
+golub <- data.frame(golub)
+zyx_neg_cor <- apply(golub,1,function(x) cor.test(x, as.numeric(golub[2124,]), alternative = "less")$p.value)
+p.fdrzyx <- p.adjust(p=zyx_neg_cor, method = "fdr")
+sum(p.fdrzyx<0.05)
+```
+
+
+QUESTION: On the Golub et al. (1999) data set, regress the expression values for the GRO3 
+GRO3 oncogene on the expression values of the GRO2 GRO2 oncogene.   
+ 
+(a) Is there a statistically significant linear relationship between the two genes’ 
+expression? Use appropriate statistical analysis to make the conclusion. 
+What proportion of the GRO3 GRO3 oncogene expression’s variation can 
+be explained by the regression on GRO2 GRO2 oncogene expression? 
+ 
+(b) Test if the slope parameter is less than 0.5 at the α = 0.05 level.   
+ 
+(c) Find an 80% prediction interval for the GRO3 GRO3 oncogene expression 
+when GRO2 GRO2 oncogene is not expressed (zero expression value). 
+ 
+(d) Check the regression model assumptions. Can we trust the statistical 
+inferences from the regression fit?
+
+```{r}
+GRO3 <- as.numeric(golub[2715,]) 
+GRO2 <- as.numeric(golub[2714,])
+lin.regGolub <- lm(GRO3 ~ GRO2)
+lin.regGolub
+```
+
+part a
+
+```{r}
+cor.test(GRO3, GRO2)
+```
+
+We can see from the pearson's product-moment correlation test, there is a moderately strong positive linear relationship between the expression values of the genes. This is evident from the rather large R value of around 0.8 and the very small p-value of 2.2*10^-9
+
+```{r}
+summary(lin.regGolub)
+```
+
+63.46% of the GRO3 expression variation can be explained by regression on GRO2 expression. 
+
+part b
+
+```{r}
+confint(lin.regGolub, level = 0.9)
+```
+
+The slope parameter is less than 0.5 at the alpha 5% (0.05) level 
+
+part c 
+
+```{r}
+predict(lin.regGolub, newdata=data.frame(GRO2=0), interval = "prediction", level = 0.80)
+```
+
+part d 
+
+```{r}
+shapiro.test(resid(lin.regGolub))
+```
+
+p-value is greater than 0.05 thus we fail to reject the null hypothesis of normality. The assumption for normality holds and we can trust the inferences from the regression fit 
+
+QUESTION: For this problem, work with the data set stackloss that comes with R. You can get 
+help on the data set with ?stackloss command. That shows you the basic 
+information and source reference of the data set. Note: it is a data frame with four 
+variables. The variable stack.loss contains the ammonia loss in a manufacturing 
+(oxidation of ammonia to nitric acid) plant measured on 21 consecutive days. We 
+try to predict it using the other three variables: air flow (Air.Flow) to the plant, 
+cooling water inlet temperature (C) (Water.Temp), and acid concentration 
+(Acid.Conc.)   
+ 
+(a) Regress stack.loss on the other three variables. What is the fitted regression 
+equation? 
+ 
+(b) Do all three variables have statistical significant effect on stack.loss? What 
+proportion of variation in stack.loss is explained by the regression on the 
+other three variables? 
+ 
+(c) Find a 90% confidence interval and 90% prediction interval for stack.loss 
+when Air.Flow=60, Water.Temp=20 and Acid.Conc.=90. 
+
+```{r}
+data("stackloss")
+```
+
+part a 
+
+```{r}
+lin.reg <- lm(stack.loss~Air.Flow+Water.Temp+Acid.Conc.,data = stackloss)
+summary(lin.reg)
+```
+
+fitted regression equation: Stack.Loss = -39.92 +0.72Air.FLow + 1.30Water.Temp -0.15Acid.Conc.
+
+part b 
+
+No, not all three variables have a statistically significant effect on stack loss. Air flow and water temperature do but acid concentration does not. Together the variables explain 91.36% of total variation in stack loss. 
+
+part c - 90% confidence and prediction intervals
+
+```{r}
+predict(lin.reg, data.frame(Air.Flow=60,Water.Temp=20,Acid.Conc.=90),interval = "confidence", level = 0.90)
+```
+
+```{r}
+predict(lin.reg, data.frame(Air.Flow=60,Water.Temp=20,Acid.Conc.=90),interval = "prediction", level = 0.90)
+```
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
